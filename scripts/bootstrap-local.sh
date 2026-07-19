@@ -14,6 +14,14 @@ IMAGE_REPO="ghcr.io/${GHCR_OWNER}/node-api"
 IMAGE_TAG="local"
 GIT_SERVER_NAME="node-api-git-server"
 GIT_SCRATCH_DIR="$(mktemp -d /tmp/node-api-gitops-demo.XXXXXX)"
+# GIT_SOURCE=local (default): stands up a throwaway Gitea container and
+# pushes a snapshot of the working tree, so the demo works fully offline
+# and picks up uncommitted local edits. GIT_SOURCE=github: skips Gitea
+# entirely and points Flux straight at the committed
+# gitops/clusters/local/flux-system/gitrepository.yaml URL (must already
+# be pushed to that real, public repo) — use this to verify Flux against
+# the actual GitHub remote rather than the local substitute.
+GIT_SOURCE="${GIT_SOURCE:-local}"
 
 export PATH="$TOOLS_DIR:$PATH"
 
@@ -88,74 +96,80 @@ kubectl -n flux-system create secret generic slack-webhook \
   --dry-run=client -o yaml | kubectl apply -f -
 
 # ---------------------------------------------------------------------------
-log "Standing up a local Gitea server for Flux to reconcile from"
-# The primary/documented source is the published GitHub repository (see
-# gitops/clusters/local/flux-system/gitrepository.yaml). Standing up a real
-# GitHub remote is a deliberate, user-facing action this script does not
-# take on its own — see docs/gitops.md. Flux's git client (go-git) only
-# speaks the smart HTTP protocol, so a real git-http-backend implementation
-# is required; Gitea is used here (not a bare-repo dumb-HTTP static server)
-# because it implements smart HTTP correctly. Swap GitRepository.spec.url
-# to the GitHub URL once the repo is pushed and nothing else changes.
+if [ "$GIT_SOURCE" = "local" ]; then
+  log "Standing up a local Gitea server for Flux to reconcile from"
+  # The primary/documented source is the published GitHub repository (see
+  # gitops/clusters/local/flux-system/gitrepository.yaml). Standing up a real
+  # GitHub remote is a deliberate, user-facing action this script does not
+  # take on its own by default — see docs/gitops.md and GIT_SOURCE=github
+  # above. Flux's git client (go-git) only speaks the smart HTTP protocol,
+  # so a real git-http-backend implementation is required; Gitea is used
+  # here (not a bare-repo dumb-HTTP static server) because it implements
+  # smart HTTP correctly.
 
-GITEA_USER="demo"
-GITEA_PASS="demo-password-1234"
-GITEA_REPO="kubernetes-gitops-platform"
+  GITEA_USER="demo"
+  GITEA_PASS="demo-password-1234"
+  GITEA_REPO="kubernetes-gitops-platform"
 
-docker rm -f "$GIT_SERVER_NAME" >/dev/null 2>&1 || true
-docker run -d --name "$GIT_SERVER_NAME" \
-  --network "$DOCKER_NETWORK" \
-  -p 127.0.0.1:3000:3000 \
-  -e GITEA__security__INSTALL_LOCK=true \
-  -e GITEA__database__DB_TYPE=sqlite3 \
-  -e GITEA__server__DISABLE_SSH=true \
-  gitea/gitea:1.22 >/dev/null
+  docker rm -f "$GIT_SERVER_NAME" >/dev/null 2>&1 || true
+  docker run -d --name "$GIT_SERVER_NAME" \
+    --network "$DOCKER_NETWORK" \
+    -p 127.0.0.1:3000:3000 \
+    -e GITEA__security__INSTALL_LOCK=true \
+    -e GITEA__database__DB_TYPE=sqlite3 \
+    -e GITEA__server__DISABLE_SSH=true \
+    gitea/gitea:1.22 >/dev/null
 
-log "Waiting for Gitea to become ready"
-for i in $(seq 1 30); do
-  curl -sf http://127.0.0.1:3000/api/healthz >/dev/null 2>&1 && break
-  sleep 2
-  [ "$i" -eq 30 ] && fail "Gitea did not become ready in time"
-done
+  log "Waiting for Gitea to become ready"
+  for i in $(seq 1 30); do
+    curl -sf http://127.0.0.1:3000/api/healthz >/dev/null 2>&1 && break
+    sleep 2
+    [ "$i" -eq 30 ] && fail "Gitea did not become ready in time"
+  done
 
-docker exec -u git "$GIT_SERVER_NAME" gitea admin user create \
-  --username "$GITEA_USER" --password "$GITEA_PASS" \
-  --email demo@example.com --admin --must-change-password=false >/dev/null
+  docker exec -u git "$GIT_SERVER_NAME" gitea admin user create \
+    --username "$GITEA_USER" --password "$GITEA_PASS" \
+    --email demo@example.com --admin --must-change-password=false >/dev/null
 
-curl -sf -u "${GITEA_USER}:${GITEA_PASS}" -X POST \
-  -H "Content-Type: application/json" \
-  -d "{\"name\":\"${GITEA_REPO}\",\"private\":false}" \
-  http://127.0.0.1:3000/api/v1/user/repos >/dev/null
+  curl -sf -u "${GITEA_USER}:${GITEA_PASS}" -X POST \
+    -H "Content-Type: application/json" \
+    -d "{\"name\":\"${GITEA_REPO}\",\"private\":false}" \
+    http://127.0.0.1:3000/api/v1/user/repos >/dev/null
 
-REPO_COPY="$GIT_SCRATCH_DIR/kubernetes-gitops-platform"
-mkdir -p "$REPO_COPY"
-# --filter=':- .gitignore' skips everything .gitignore excludes (Terraform
-# provider caches, .venv, .tools, ...) so the pushed snapshot stays small
-# and doesn't drift out of sync with .gitignore over time.
-rsync -a --filter=':- .gitignore' --exclude='.git' "$ROOT_DIR/" "$REPO_COPY/"
-find "$REPO_COPY" -type f -name '*.yaml' -exec sed -i "s#REPLACE_WITH_OWNER#${GHCR_OWNER}#g" {} +
+  REPO_COPY="$GIT_SCRATCH_DIR/kubernetes-gitops-platform"
+  mkdir -p "$REPO_COPY"
+  # --filter=':- .gitignore' skips everything .gitignore excludes (Terraform
+  # provider caches, .venv, .tools, ...) so the pushed snapshot stays small
+  # and doesn't drift out of sync with .gitignore over time.
+  rsync -a --filter=':- .gitignore' --exclude='.git' "$ROOT_DIR/" "$REPO_COPY/"
+  find "$REPO_COPY" -type f -name '*.yaml' -exec sed -i "s#REPLACE_WITH_OWNER#${GHCR_OWNER}#g" {} +
 
-git -C "$REPO_COPY" init -q -b main
-git -C "$REPO_COPY" -c user.email=demo@example.com -c user.name="Local Demo" \
-  add -A
-git -C "$REPO_COPY" -c user.email=demo@example.com -c user.name="Local Demo" \
-  commit -q -m "local demo snapshot"
-git -C "$REPO_COPY" push -q \
-  "http://${GITEA_USER}:${GITEA_PASS}@127.0.0.1:3000/${GITEA_USER}/${GITEA_REPO}.git" main
+  git -C "$REPO_COPY" init -q -b main
+  git -C "$REPO_COPY" -c user.email=demo@example.com -c user.name="Local Demo" \
+    add -A
+  git -C "$REPO_COPY" -c user.email=demo@example.com -c user.name="Local Demo" \
+    commit -q -m "local demo snapshot"
+  git -C "$REPO_COPY" push -q \
+    "http://${GITEA_USER}:${GITEA_PASS}@127.0.0.1:3000/${GITEA_USER}/${GITEA_REPO}.git" main
 
-log "Local git server '$GIT_SERVER_NAME' (Gitea) serving the repo snapshot to the kind cluster"
+  log "Local git server '$GIT_SERVER_NAME' (Gitea) serving the repo snapshot to the kind cluster"
 
-kubectl -n flux-system create secret generic node-api-platform-auth \
-  --from-literal=username="$GITEA_USER" \
-  --from-literal=password="$GITEA_PASS" \
-  --dry-run=client -o yaml | kubectl apply -f -
+  kubectl -n flux-system create secret generic node-api-platform-auth \
+    --from-literal=username="$GITEA_USER" \
+    --from-literal=password="$GITEA_PASS" \
+    --dry-run=client -o yaml | kubectl apply -f -
+else
+  log "GIT_SOURCE=github: skipping Gitea, pointing Flux at the real GitHub repo"
+fi
 
 # ---------------------------------------------------------------------------
 log "Applying Flux GitRepository and Kustomizations"
 
 kubectl apply -f "$ROOT_DIR/gitops/clusters/local/flux-system/gitrepository.yaml"
-kubectl -n flux-system patch gitrepository node-api-platform --type merge -p \
-  "{\"spec\":{\"url\":\"http://${GIT_SERVER_NAME}:3000/${GITEA_USER}/${GITEA_REPO}.git\",\"secretRef\":{\"name\":\"node-api-platform-auth\"}}}"
+if [ "$GIT_SOURCE" = "local" ]; then
+  kubectl -n flux-system patch gitrepository node-api-platform --type merge -p \
+    "{\"spec\":{\"url\":\"http://${GIT_SERVER_NAME}:3000/${GITEA_USER}/${GITEA_REPO}.git\",\"secretRef\":{\"name\":\"node-api-platform-auth\"}}}"
+fi
 
 kubectl apply -f "$ROOT_DIR/gitops/clusters/local/flux-system/kustomization-infrastructure.yaml"
 kubectl apply -f "$ROOT_DIR/gitops/clusters/local/flux-system/kustomization-kyverno-policies.yaml"
