@@ -1,0 +1,6 @@
+apiVersion: v2
+name: node-api
+description: Reusable Helm chart for the node-api FastAPI service (health, /nodes, /metrics)
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

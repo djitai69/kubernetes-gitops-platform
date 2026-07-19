@@ -1,0 +1,42 @@
+# Local ESO demo backend, same-namespace to avoid cross-namespace
+# ServiceAccount reference restrictions on namespaced SecretStores. This
+# Secret stands in for AWS Secrets Manager; production uses the "aws"
+# provider instead (see gitops/apps/node-api/production/secretstore.yaml).
+apiVersion: v1
+kind: Secret
+metadata:
+  name: node-api-bootstrap-token
+  namespace: node-api-production
+type: Opaque
+stringData:
+  API_TOKEN: local-dev-token-changeme
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: eso-local-reader
+  namespace: node-api-production
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: eso-local-reader
+  namespace: node-api-production
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: eso-local-reader
+  namespace: node-api-production
+subjects:
+  - kind: ServiceAccount
+    name: eso-local-reader
+    namespace: node-api-production
+roleRef:
+  kind: Role
+  name: eso-local-reader
+  apiGroup: rbac.authorization.k8s.io

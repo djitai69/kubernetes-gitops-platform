@@ -1,0 +1,10 @@
+node-api deployed to {{ .Release.Namespace }}.
+
+Check status:
+  kubectl -n {{ .Release.Namespace }} get pods,svc,hpa,pdb
+
+Port-forward the app:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "node-api.fullname" . }} 8000:{{ .Values.service.app.port }}
+
+/nodes requires a bearer token from the {{ .Values.secret.name }} Secret:
+  kubectl -n {{ .Release.Namespace }} get secret {{ .Values.secret.name }} -o jsonpath='{.data.{{ .Values.secret.apiTokenKey }}}' | base64 -d

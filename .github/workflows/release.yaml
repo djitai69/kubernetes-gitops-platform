@@ -1,0 +1,79 @@
+name: Release (staging/production promotion)
+
+# Staging promotion happens through a normal pull request against
+# gitops/apps/node-api/staging/helmrelease.yaml (no workflow needed — the
+# reviewer approving the PR *is* the promotion gate).
+#
+# This workflow handles the production step specifically: tagging a
+# semantic version attaches it to an already-built, already-tested digest
+# (never rebuilds), and copies that exact digest into the production
+# registry so the promoted artifact is bit-for-bit identical to what was
+# tested in non-production.
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  id-token: write
+  contents: read
+  packages: read
+
+jobs:
+  promote-to-production:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve source digest for this tag's commit
+        id: source
+        run: |
+          SHORT_SHA=$(git rev-parse --short=7 "${GITHUB_SHA}")
+          echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials (OIDC, no long-lived keys)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.PROD_PROMOTION_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Install crane
+        uses: imjasonh/setup-crane@v0.4
+
+      - name: Log in to GHCR (read) and ECR (write)
+        run: |
+          crane auth login ghcr.io -u "${{ github.actor }}" -p "${{ secrets.GITHUB_TOKEN }}"
+          aws ecr get-login-password --region "${{ vars.AWS_REGION }}" \
+            | crane auth login "${{ vars.PROD_ECR_REGISTRY }}" -u AWS --password-stdin
+
+      - name: Copy exact digest from non-prod GHCR to production ECR (no rebuild)
+        id: promote
+        run: |
+          SRC="ghcr.io/${{ github.repository_owner }}/node-api:${{ steps.source.outputs.short_sha }}"
+          DIGEST=$(crane digest "$SRC")
+          DEST="${{ vars.PROD_ECR_REGISTRY }}/node-api:${{ github.ref_name }}"
+          crane copy "${SRC}@${DIGEST}" "$DEST"
+          crane copy "${SRC}@${DIGEST}" "${{ vars.PROD_ECR_REGISTRY }}/node-api@${DIGEST}"
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+
+      - name: Update production GitOps values
+        run: |
+          cd gitops/apps/node-api/production
+          sed -i "s/tag: .*/tag: ${{ github.ref_name }}/" helmrelease.yaml
+          sed -i "s/digest: .*/digest: \"${{ steps.promote.outputs.digest }}\"/" helmrelease.yaml
+
+      - name: Open production promotion pull request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITOPS_BOT_TOKEN }}
+          branch: "promote-${{ github.ref_name }}"
+          title: "Promote ${{ github.ref_name }} to production"
+          commit-message: "release: promote ${{ github.ref_name }} (${{ steps.promote.outputs.digest }}) to production"
+          body: |
+            Promotes the digest already built and scanned for
+            `${{ steps.source.outputs.short_sha }}` to production, tagged
+            `${{ github.ref_name }}`. No image is rebuilt; this only copies
+            the tested digest into the production ECR registry and updates
+            the GitOps reference. Requires protected-environment approval
+            per the branch protection rules on `main`.

@@ -1,0 +1,10 @@
+# The local kind demo deploys node-api into all three application
+# namespaces. dev/ and staging/ are reused as-is (same manifests a real
+# non-production EKS cluster would apply); production/ is a local-only
+# simulation replacing ALB/ECR/IRSA with nginx/GHCR/local-ESO.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../dev
+  - ../staging
+  - production

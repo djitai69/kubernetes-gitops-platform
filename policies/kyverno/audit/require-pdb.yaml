@@ -1,0 +1,35 @@
+# Audit-only: checks that a PodDisruptionBudget exists in the same
+# namespace covering this Deployment's selector labels. Uses a context
+# apiCall since "does a companion resource exist" cannot be expressed as a
+# simple field pattern.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-pdb
+  annotations:
+    policies.kyverno.io/title: Require PodDisruptionBudget
+    policies.kyverno.io/category: Availability
+    policies.kyverno.io/severity: low
+spec:
+  validationFailureAction: Audit
+  background: true
+  rules:
+    - name: require-pdb-for-deployments
+      match:
+        any:
+          - resources:
+              kinds: ["Deployment"]
+              namespaces: ["node-api-staging", "node-api-production"]
+      context:
+        - name: pdbs
+          apiCall:
+            urlPath: "/apis/policy/v1/namespaces/{{ request.object.metadata.namespace }}/poddisruptionbudgets"
+            jmesPath: "items[] | length(@)"
+      validate:
+        message: "Deployments in staging/production should have a matching PodDisruptionBudget in the namespace."
+        deny:
+          conditions:
+            any:
+              - key: "{{ pdbs }}"
+                operator: Equals
+                value: 0

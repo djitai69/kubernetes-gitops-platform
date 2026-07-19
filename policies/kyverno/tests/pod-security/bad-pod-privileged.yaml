@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-pod-privileged
+  namespace: node-api-production
+  labels:
+    app.kubernetes.io/name: node-api
+    app.kubernetes.io/instance: node-api
+spec:
+  hostNetwork: true
+  containers:
+    - name: node-api
+      image: ghcr.io/example/node-api:a8f2c91
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 500m
+          memory: 256Mi
+      securityContext:
+        privileged: true
+        allowPrivilegeEscalation: true
+        readOnlyRootFilesystem: false
+      livenessProbe:
+        httpGet:
+          path: /health/live
+          port: 8000
+      readinessProbe:
+        httpGet:
+          path: /health/ready
+          port: 8000

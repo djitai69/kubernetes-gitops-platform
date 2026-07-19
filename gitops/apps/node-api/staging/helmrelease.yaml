@@ -1,0 +1,46 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: node-api
+  namespace: node-api-staging
+spec:
+  interval: 1m
+  chart:
+    spec:
+      chart: ./helm/node-api
+      sourceRef:
+        kind: GitRepository
+        name: node-api-platform
+        namespace: flux-system
+  values:
+    image:
+      repository: ghcr.io/REPLACE_WITH_OWNER/node-api
+      # Promoted via pull request; digest copied from the dev-tested image.
+      # Ships as `local` so `make demo` works out of the box.
+      tag: local
+      pullPolicy: IfNotPresent
+    config:
+      appEnv: staging
+      logLevel: INFO
+      nodesCacheTtlSeconds: 15
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 4
+      targetCPUUtilizationPercentage: 70
+    pdb:
+      enabled: true
+      maxUnavailable: 1
+    topologySpread:
+      enabled: true
+    serviceMonitor:
+      enabled: false
+    reloader:
+      enabled: true
+    ingress:
+      enabled: true
+      className: nginx
+      host: staging.node-api.local
+    secret:
+      name: node-api-secret
+      apiTokenKey: API_TOKEN

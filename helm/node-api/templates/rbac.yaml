@@ -1,0 +1,29 @@
+{{- if .Values.rbac.create }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "node-api.fullname" . }}-{{ .Release.Namespace }}-nodes-reader
+  labels:
+    {{- include "node-api.labels" . | nindent 4 }}
+rules:
+  # Least privilege: the application only lists nodes. get/watch are not
+  # required and are intentionally omitted.
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "node-api.fullname" . }}-{{ .Release.Namespace }}-nodes-reader
+  labels:
+    {{- include "node-api.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "node-api.fullname" . }}-{{ .Release.Namespace }}-nodes-reader
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "node-api.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

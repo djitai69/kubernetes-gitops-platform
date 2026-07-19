@@ -1,0 +1,33 @@
+# Audit-only: flags ClusterRoles granting get/watch/* on nodes or
+# wildcard verbs/resources, broader than node-api's least-privilege
+# list-only rule.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: warn-broad-rbac
+  annotations:
+    policies.kyverno.io/title: Warn on Broad RBAC Grants
+    policies.kyverno.io/category: RBAC
+    policies.kyverno.io/severity: medium
+spec:
+  validationFailureAction: Audit
+  background: true
+  rules:
+    - name: disallow-wildcard-verbs-or-resources
+      match:
+        any:
+          - resources:
+              kinds: ["ClusterRole", "Role"]
+      validate:
+        message: "Avoid wildcard verbs/resources in RBAC rules; grant only the specific verbs required."
+        foreach:
+          - list: "request.object.rules"
+            deny:
+              conditions:
+                any:
+                  - key: "*"
+                    operator: AnyIn
+                    value: "{{ element.verbs }}"
+                  - key: "*"
+                    operator: AnyIn
+                    value: "{{ element.resources || `[]` }}"

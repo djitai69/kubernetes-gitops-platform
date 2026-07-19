@@ -1,0 +1,44 @@
+# Optional. Applied only by `make demo-observability`, not the core demo,
+# so the core path never depends on Prometheus Operator CRDs.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: kube-prometheus-stack
+  namespace: flux-system
+spec:
+  interval: 30m
+  targetNamespace: monitoring
+  install:
+    createNamespace: true
+    timeout: 10m
+  chart:
+    spec:
+      chart: kube-prometheus-stack
+      version: "65.x"
+      sourceRef:
+        kind: HelmRepository
+        name: prometheus-community
+  values:
+    # Helm release name used as the "release:" label so node-api's
+    # ServiceMonitor (serviceMonitor.releaseLabel) is picked up.
+    fullnameOverride: monitoring
+    prometheus:
+      prometheusSpec:
+        serviceMonitorSelectorNilUsesHelmValues: false
+        podMonitorSelectorNilUsesHelmValues: false
+        ruleSelectorNilUsesHelmValues: false
+        resources:
+          requests:
+            cpu: 100m
+            memory: 512Mi
+    alertmanager:
+      alertmanagerSpec:
+        resources:
+          requests:
+            cpu: 25m
+            memory: 128Mi
+    grafana:
+      resources:
+        requests:
+          cpu: 50m
+          memory: 128Mi

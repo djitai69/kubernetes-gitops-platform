@@ -1,0 +1,80 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: node-api-alerts
+  namespace: monitoring
+  labels:
+    release: monitoring
+spec:
+  groups:
+    - name: node-api.rules
+      rules:
+        - alert: NodeApiHighErrorRate
+          expr: |
+            sum(rate(http_requests_total{job="node-api",status=~"5.."}[5m]))
+            /
+            sum(rate(http_requests_total{job="node-api"}[5m])) > 0.05
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "node-api 5xx rate above 5%"
+
+        - alert: NodeApiHighCpu
+          expr: |
+            sum(rate(container_cpu_usage_seconds_total{namespace=~"node-api-.*", container="node-api"}[5m]))
+            by (namespace)
+            /
+            sum(kube_pod_container_resource_requests{namespace=~"node-api-.*", container="node-api", resource="cpu"})
+            by (namespace) > 0.9
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "node-api CPU usage above 90% of requests for 10m"
+
+        - alert: NodeApiDeploymentUnavailable
+          expr: |
+            kube_deployment_status_replicas_available{deployment="node-api", namespace=~"node-api-.*"} == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "node-api has zero available replicas"
+
+        - alert: NodeApiCrashLooping
+          expr: |
+            increase(kube_pod_container_status_restarts_total{namespace=~"node-api-.*", container="node-api"}[15m]) > 3
+          labels:
+            severity: warning
+          annotations:
+            summary: "node-api pod restarting frequently"
+
+        - alert: NodeApiHpaAtMaxReplicas
+          expr: |
+            kube_horizontalpodautoscaler_status_current_replicas{namespace=~"node-api-.*", horizontalpodautoscaler="node-api"}
+            ==
+            kube_horizontalpodautoscaler_spec_max_replicas{namespace=~"node-api-.*", horizontalpodautoscaler="node-api"}
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "node-api HPA pinned at max replicas"
+
+        - alert: FluxKustomizationFailed
+          expr: |
+            gotk_reconcile_condition{type="Ready", kind="Kustomization", status="False"} == 1
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Flux Kustomization has not reconciled successfully"
+
+        - alert: FluxHelmReleaseFailed
+          expr: |
+            gotk_reconcile_condition{type="Ready", kind="HelmRelease", status="False"} == 1
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Flux HelmRelease has not reconciled successfully"

@@ -1,0 +1,153 @@
+# Default values. Environment-specific overrides live in the GitOps repository
+# (gitops/apps/node-api/<env>/values.yaml) and are applied via Flux HelmRelease.
+
+nameOverride: ""
+
+image:
+  repository: ghcr.io/example/node-api
+  tag: "latest"
+  digest: ""
+  pullPolicy: IfNotPresent
+
+serviceAccount:
+  create: true
+  name: ""
+  automountServiceAccountToken: true
+
+rbac:
+  create: true
+
+podLabels: {}
+podAnnotations: {}
+
+ports:
+  app: 8000
+  metrics: 9000
+
+service:
+  app:
+    port: 80
+  metrics:
+    port: 9000
+
+# replicaCount is intentionally omitted from the Deployment template when
+# autoscaling.enabled is true — Git defines the autoscaling policy, HPA
+# controls the live replica count.
+replicaCount: 1
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+  seccompProfile:
+    type: RuntimeDefault
+
+podSecurityContext:
+  fsGroup: 10001
+
+tmpVolume:
+  enabled: true
+  sizeLimit: 64Mi
+
+updateStrategy:
+  maxSurge: 1
+  maxUnavailable: 0
+
+terminationGracePeriodSeconds: 30
+preStopSleepSeconds: 5
+
+probes:
+  liveness:
+    path: /health/live
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 2
+    failureThreshold: 3
+  readiness:
+    path: /health/ready
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 2
+    failureThreshold: 3
+
+config:
+  appEnv: local
+  logLevel: INFO
+  kubernetesRequestTimeoutSeconds: 2
+  nodesCacheTtlSeconds: 10
+
+# Secret consumption: the application reads API_TOKEN from a Kubernetes
+# Secret. In AWS this Secret is materialized by External Secrets Operator.
+# For the local kind demo, see local/eso-fallback for a documented fallback.
+secret:
+  name: node-api-secret
+  apiTokenKey: API_TOKEN
+
+# Disabled by default; production and the primary kind demo path use
+# External Secrets Operator to materialize the same Secret name/key.
+localSecretFallback:
+  enabled: false
+  apiToken: ""
+
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 70
+  stabilizationWindowSeconds: 300
+
+pdb:
+  enabled: false
+  minAvailable: null
+  maxUnavailable: null
+
+topologySpread:
+  enabled: false
+  maxSkew: 1
+
+networkPolicy:
+  enabled: true
+  ingressFrom:
+    namespaceLabel: kubernetes.io/metadata.name
+    namespaceValue: ingress-nginx
+  metricsFrom:
+    namespaceLabel: kubernetes.io/metadata.name
+    namespaceValue: monitoring
+  kubernetesApi:
+    ports: [443, 6443]
+    cidr: ""
+
+reloader:
+  enabled: false
+
+serviceMonitor:
+  enabled: false
+  interval: 15s
+  # kube-prometheus-stack's Prometheus CR selects ServiceMonitors by this
+  # label; it must match the Helm release name of the prometheus stack.
+  releaseLabel: monitoring
+
+ingress:
+  enabled: false
+  className: nginx
+  host: node-api.local
+  tls:
+    enabled: false
+    secretName: ""
+  annotations: {}
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

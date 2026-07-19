@@ -1,0 +1,18 @@
+# Not included in flux-system/kustomization.yaml's default resource list —
+# applied explicitly by `make demo-observability` via:
+#   kubectl apply -f gitops/clusters/local/flux-system/kustomization-observability.yaml
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: observability
+  namespace: flux-system
+spec:
+  interval: 5m
+  sourceRef:
+    kind: GitRepository
+    name: node-api-platform
+  path: ./gitops/infrastructure/local/kube-prometheus-stack
+  prune: true
+  dependsOn:
+    - name: infrastructure
+  timeout: 10m

@@ -1,0 +1,43 @@
+# Require liveness and readiness probes on every container.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-probes
+  annotations:
+    policies.kyverno.io/title: Require Liveness and Readiness Probes
+    policies.kyverno.io/category: Best Practices
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/description: >-
+      Every container must define livenessProbe and readinessProbe so
+      Kubernetes can detect hung processes and gate traffic on startup.
+spec:
+  validationFailureAction: Audit
+  validationFailureActionOverrides:
+    - action: Enforce
+      namespaces:
+        - node-api-staging
+        - node-api-production
+    - action: Audit
+      namespaces:
+        - node-api-dev
+  background: true
+  rules:
+    - name: require-liveness-and-readiness-probes
+      match:
+        any:
+          - resources:
+              kinds: ["Pod"]
+              namespaces: ["node-api-*"]
+      validate:
+        # node-api always uses httpGet probes; this pattern is intentionally
+        # specific rather than a generic "any probe type" existence check.
+        message: "Every container must define both livenessProbe.httpGet and readinessProbe.httpGet."
+        pattern:
+          spec:
+            containers:
+              - livenessProbe:
+                  httpGet:
+                    path: "?*"
+                readinessProbe:
+                  httpGet:
+                    path: "?*"

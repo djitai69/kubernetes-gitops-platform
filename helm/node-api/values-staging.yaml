@@ -1,0 +1,21 @@
+image:
+  repository: ghcr.io/example/node-api
+  tag: a8f2c91
+
+config:
+  appEnv: staging
+  logLevel: INFO
+  nodesCacheTtlSeconds: 15
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 70
+
+pdb:
+  enabled: true
+  maxUnavailable: 1
+
+topologySpread:
+  enabled: true

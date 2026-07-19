@@ -1,0 +1,44 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: node-api
+  namespace: node-api-dev
+spec:
+  interval: 1m
+  chart:
+    spec:
+      chart: ./helm/node-api
+      sourceRef:
+        kind: GitRepository
+        name: node-api-platform
+        namespace: flux-system
+  values:
+    image:
+      repository: ghcr.io/REPLACE_WITH_OWNER/node-api
+      # CI updates this to a short Git SHA on every merge to main. Ships as
+      # `local` so `make demo` works out of the box via `kind load
+      # docker-image` without requiring a prior CI run.
+      tag: local
+      pullPolicy: IfNotPresent
+    config:
+      appEnv: dev
+      logLevel: DEBUG
+      nodesCacheTtlSeconds: 5
+    replicaCount: 1
+    autoscaling:
+      enabled: false
+    pdb:
+      enabled: false
+    topologySpread:
+      enabled: false
+    serviceMonitor:
+      enabled: false
+    reloader:
+      enabled: true
+    ingress:
+      enabled: true
+      className: nginx
+      host: dev.node-api.local
+    secret:
+      name: node-api-secret
+      apiTokenKey: API_TOKEN

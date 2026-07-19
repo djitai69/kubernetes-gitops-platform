@@ -1,0 +1,14 @@
+# Flux's source of truth for the local kind demo. Defaults to the published
+# public GitHub repository (read-only, no credentials needed); the
+# bootstrap script may override --set-string or patch this to a local git
+# server for fully offline verification. See docs/gitops.md.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: node-api-platform
+  namespace: flux-system
+spec:
+  interval: 1m
+  url: https://github.com/REPLACE_WITH_OWNER/kubernetes-gitops-platform.git
+  ref:
+    branch: main

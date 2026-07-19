@@ -1,0 +1,116 @@
+name: Terraform
+
+on:
+  pull_request:
+    paths:
+      - "infra/**"
+      - ".github/workflows/terraform.yaml"
+  push:
+    branches: [main]
+    paths:
+      - "infra/**"
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  plan:
+    strategy:
+      matrix:
+        environment: [nonprod, production]
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/live/${{ matrix.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10.3"
+
+      - name: terraform fmt -check
+        run: terraform fmt -check -recursive ../..
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ matrix.environment == 'production' && secrets.PROD_TERRAFORM_ROLE_ARN || secrets.NONPROD_TERRAFORM_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: terraform init
+        run: terraform init -backend=true
+
+      - name: terraform validate
+        run: terraform validate
+
+      - name: Security/static analysis (Checkov)
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: infra/live/${{ matrix.environment }}
+          quiet: true
+          soft_fail: true
+
+      - name: terraform plan
+        run: terraform plan -out=tfplan -input=false
+
+      - name: Publish plan artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-${{ matrix.environment }}-${{ github.sha }}
+          path: infra/live/${{ matrix.environment }}/tfplan
+          retention-days: 14
+
+  apply-nonprod:
+    name: Apply (non-production, lighter approval)
+    needs: plan
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: nonprod-apply
+    defaults:
+      run:
+        working-directory: infra/live/nonprod
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10.3"
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.NONPROD_TERRAFORM_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - run: terraform init -backend=true
+      - name: Download reviewed plan
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan-nonprod-${{ github.sha }}
+          path: infra/live/nonprod
+      - run: terraform apply -input=false tfplan
+
+  apply-production:
+    name: Apply (production, protected environment)
+    needs: [plan, apply-nonprod]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production-apply
+    defaults:
+      run:
+        working-directory: infra/live/production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10.3"
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.PROD_TERRAFORM_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - run: terraform init -backend=true
+      - name: Download reviewed plan
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan-production-${{ github.sha }}
+          path: infra/live/production
+      - run: terraform apply -input=false tfplan

@@ -1,0 +1,23 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-topology-spread
+  annotations:
+    policies.kyverno.io/title: Require Topology Spread Constraints
+    policies.kyverno.io/category: Availability
+    policies.kyverno.io/severity: low
+spec:
+  validationFailureAction: Audit
+  background: true
+  rules:
+    - name: require-topology-spread-constraints
+      match:
+        any:
+          - resources:
+              kinds: ["Pod"]
+              namespaces: ["node-api-staging", "node-api-production"]
+      validate:
+        message: "Multi-replica workloads in staging/production should define topologySpreadConstraints across zones and nodes."
+        pattern:
+          spec:
+            topologySpreadConstraints: "?*"

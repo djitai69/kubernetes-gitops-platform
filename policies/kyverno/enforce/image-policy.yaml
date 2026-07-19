@@ -1,0 +1,72 @@
+# Disallow the `latest` tag and restrict images to approved registries.
+# Registry allowlist differs per cluster: kind/demo pulls from GHCR, AWS
+# pulls from the production ECR account. Both prefixes are allowed here so
+# the same policy works for the local demo and is a template for AWS.
+#
+# Assumes single-container pods (true for node-api); anyPattern applies to
+# the whole containers array, so multi-container pods would need a
+# foreach-based rewrite.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: image-policy
+  annotations:
+    policies.kyverno.io/title: Restrict Image Tags and Registries
+    policies.kyverno.io/category: Supply Chain
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/description: >-
+      Disallows the mutable `latest` tag (and untagged images) and restricts
+      container images to an explicit registry allowlist.
+spec:
+  validationFailureAction: Audit
+  validationFailureActionOverrides:
+    - action: Enforce
+      namespaces:
+        - node-api-staging
+        - node-api-production
+    - action: Audit
+      namespaces:
+        - node-api-dev
+  background: true
+  rules:
+    - name: require-image-tag
+      match:
+        any:
+          - resources:
+              kinds: ["Pod"]
+              namespaces: ["node-api-*"]
+      validate:
+        message: "An image tag or digest is required."
+        pattern:
+          spec:
+            containers:
+              - image: "*:*"
+
+    - name: disallow-latest-tag
+      match:
+        any:
+          - resources:
+              kinds: ["Pod"]
+              namespaces: ["node-api-*"]
+      validate:
+        message: "Using the mutable ':latest' image tag is not allowed."
+        pattern:
+          spec:
+            containers:
+              - image: "!*:latest"
+
+    - name: restrict-image-registries
+      match:
+        any:
+          - resources:
+              kinds: ["Pod"]
+              namespaces: ["node-api-*"]
+      validate:
+        message: "Images must come from an approved registry (ghcr.io/<owner>/ for demo, <account>.dkr.ecr.<region>.amazonaws.com/ for AWS production)."
+        anyPattern:
+          - spec:
+              containers:
+                - image: "ghcr.io/*"
+          - spec:
+              containers:
+                - image: "*.dkr.ecr.*.amazonaws.com/*"

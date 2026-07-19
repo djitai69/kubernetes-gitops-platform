@@ -1,0 +1,32 @@
+# Audit-only: checks that at least one NetworkPolicy exists in the namespace.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-networkpolicy
+  annotations:
+    policies.kyverno.io/title: Require NetworkPolicy
+    policies.kyverno.io/category: Network Security
+    policies.kyverno.io/severity: medium
+spec:
+  validationFailureAction: Audit
+  background: true
+  rules:
+    - name: require-networkpolicy-in-namespace
+      match:
+        any:
+          - resources:
+              kinds: ["Namespace"]
+              names: ["node-api-*"]
+      context:
+        - name: policies
+          apiCall:
+            urlPath: "/apis/networking.k8s.io/v1/namespaces/{{ request.object.metadata.name }}/networkpolicies"
+            jmesPath: "items[] | length(@)"
+      validate:
+        message: "Application namespaces should have at least one NetworkPolicy (default-deny plus explicit allows)."
+        deny:
+          conditions:
+            any:
+              - key: "{{ policies }}"
+                operator: Equals
+                value: 0

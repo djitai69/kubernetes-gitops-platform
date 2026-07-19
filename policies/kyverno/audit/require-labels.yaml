@@ -1,0 +1,27 @@
+# Audit-only: not yet enforced anywhere, tightened later once workloads
+# consistently carry these labels.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-standard-labels
+  annotations:
+    policies.kyverno.io/title: Require Standard Labels
+    policies.kyverno.io/category: Best Practices
+    policies.kyverno.io/severity: low
+spec:
+  validationFailureAction: Audit
+  background: true
+  rules:
+    - name: require-labels
+      match:
+        any:
+          - resources:
+              kinds: ["Pod"]
+              namespaces: ["node-api-*"]
+      validate:
+        message: "Pods should carry app.kubernetes.io/name and app.kubernetes.io/instance labels."
+        pattern:
+          metadata:
+            labels:
+              app.kubernetes.io/name: "?*"
+              app.kubernetes.io/instance: "?*"

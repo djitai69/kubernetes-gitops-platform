@@ -1,0 +1,41 @@
+# Values for the kind demo (make demo). Real GitOps source of truth for the
+# local cluster lives in gitops/apps/node-api/local/values.yaml.
+image:
+  repository: ghcr.io/example/node-api
+  tag: local
+  pullPolicy: IfNotPresent
+
+config:
+  appEnv: local
+  logLevel: DEBUG
+  nodesCacheTtlSeconds: 5
+
+replicaCount: 1
+
+autoscaling:
+  enabled: false
+
+pdb:
+  enabled: false
+
+topologySpread:
+  enabled: false
+
+serviceMonitor:
+  enabled: false
+
+ingress:
+  enabled: true
+  className: nginx
+  host: node-api.local
+
+localSecretFallback:
+  enabled: false
+
+reloader:
+  enabled: true
+
+networkPolicy:
+  kubernetesApi:
+    ports: [443, 6443]
+    cidr: ""

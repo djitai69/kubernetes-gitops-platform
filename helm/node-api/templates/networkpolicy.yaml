@@ -1,0 +1,73 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "node-api.fullname" . }}-default-deny
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "node-api.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "node-api.fullname" . }}-allow
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "node-api.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "node-api.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Ingress controller may reach the application port only.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              {{ .Values.networkPolicy.ingressFrom.namespaceLabel }}: {{ .Values.networkPolicy.ingressFrom.namespaceValue }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.ports.app }}
+    # Monitoring namespace may reach the metrics port only. The ingress
+    # controller above has no access to this port.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              {{ .Values.networkPolicy.metricsFrom.namespaceLabel }}: {{ .Values.networkPolicy.metricsFrom.namespaceValue }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.ports.metrics }}
+  egress:
+    # DNS to CoreDNS.
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Kubernetes API. The API server is not a pod (in kind it is the
+    # control-plane container's host IP; in AWS it is the EKS control
+    # plane), so this must be an ipBlock, not a namespaceSelector. The
+    # in-cluster Service also DNATs 443 -> 6443 in kind before policy
+    # evaluation, so both ports are allowed. The bootstrap script discovers
+    # the actual kind endpoint and passes a tighter CIDR via
+    # --set networkPolicy.kubernetesApi.cidr; AWS values.yaml sets the
+    # VPC/control-plane CIDR explicitly (standard NetworkPolicy cannot
+    # target FQDNs — this is a documented limitation).
+    - to:
+        - ipBlock:
+            cidr: {{ .Values.networkPolicy.kubernetesApi.cidr | default "0.0.0.0/0" }}
+      ports:
+        {{- range .Values.networkPolicy.kubernetesApi.ports }}
+        - protocol: TCP
+          port: {{ . }}
+        {{- end }}
+{{- end }}

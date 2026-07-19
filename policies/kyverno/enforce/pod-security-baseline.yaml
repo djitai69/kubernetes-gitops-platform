@@ -1,0 +1,133 @@
+# Restricted-tier pod security baseline, matching helm/node-api's
+# securityContext defaults so a correctly-configured chart passes cleanly.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: pod-security-baseline
+  annotations:
+    policies.kyverno.io/title: Pod Security Baseline
+    policies.kyverno.io/category: Pod Security Standards (Restricted)
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/description: >-
+      Enforces non-root execution, no privilege escalation, read-only root
+      filesystem, RuntimeDefault seccomp, dropping all Linux capabilities,
+      no privileged containers, and no host namespace sharing.
+spec:
+  validationFailureAction: Audit
+  validationFailureActionOverrides:
+    - action: Enforce
+      namespaces:
+        - node-api-staging
+        - node-api-production
+    - action: Audit
+      namespaces:
+        - node-api-dev
+  background: true
+  rules:
+    - name: require-run-as-non-root
+      match:
+        any:
+          - resources:
+              kinds: ["Pod"]
+              namespaces: ["node-api-*"]
+      validate:
+        message: "Pods must set securityContext.runAsNonRoot=true (pod-level or every container)."
+        anyPattern:
+          - spec:
+              securityContext:
+                runAsNonRoot: true
+          - spec:
+              containers:
+                - securityContext:
+                    runAsNonRoot: true
+
+    - name: disallow-privilege-escalation
+      match:
+        any:
+          - resources:
+              kinds: ["Pod"]
+              namespaces: ["node-api-*"]
+      validate:
+        message: "Containers must set securityContext.allowPrivilegeEscalation=false."
+        pattern:
+          spec:
+            containers:
+              - securityContext:
+                  allowPrivilegeEscalation: false
+
+    - name: require-readonly-root-filesystem
+      match:
+        any:
+          - resources:
+              kinds: ["Pod"]
+              namespaces: ["node-api-*"]
+      validate:
+        message: "Containers must set securityContext.readOnlyRootFilesystem=true."
+        pattern:
+          spec:
+            containers:
+              - securityContext:
+                  readOnlyRootFilesystem: true
+
+    - name: require-runtime-default-seccomp
+      match:
+        any:
+          - resources:
+              kinds: ["Pod"]
+              namespaces: ["node-api-*"]
+      validate:
+        message: "Pods must set securityContext.seccompProfile.type=RuntimeDefault (pod-level or every container)."
+        anyPattern:
+          - spec:
+              securityContext:
+                seccompProfile:
+                  type: RuntimeDefault
+          - spec:
+              containers:
+                - securityContext:
+                    seccompProfile:
+                      type: RuntimeDefault
+
+    - name: require-drop-all-capabilities
+      match:
+        any:
+          - resources:
+              kinds: ["Pod"]
+              namespaces: ["node-api-*"]
+      validate:
+        message: "Containers must drop all Linux capabilities (capabilities.drop must include ALL)."
+        pattern:
+          spec:
+            containers:
+              - securityContext:
+                  capabilities:
+                    drop:
+                      - ALL
+
+    - name: disallow-privileged-containers
+      match:
+        any:
+          - resources:
+              kinds: ["Pod"]
+              namespaces: ["node-api-*"]
+      validate:
+        message: "Privileged containers are not allowed."
+        pattern:
+          spec:
+            containers:
+              - =(securityContext):
+                  =(privileged): false
+
+    - name: disallow-host-namespaces
+      match:
+        any:
+          - resources:
+              kinds: ["Pod"]
+              namespaces: ["node-api-*"]
+      validate:
+        message: "hostNetwork, hostPID, and hostIPC are not allowed."
+        pattern:
+          spec:
+            =(hostNetwork): false
+            =(hostPID): false
+            =(hostIPC): false

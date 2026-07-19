@@ -1,0 +1,44 @@
+# Require CPU/memory requests and limits on every container.
+# Dev: Audit. Staging/Production: Enforce.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-resource-requirements
+  annotations:
+    policies.kyverno.io/title: Require Resource Requests and Limits
+    policies.kyverno.io/category: Resource Management
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/description: >-
+      Every container must define CPU and memory requests and limits. HPA
+      utilization is calculated relative to CPU requests, and limits bound
+      noisy-neighbor impact on shared nodes.
+spec:
+  validationFailureAction: Audit
+  validationFailureActionOverrides:
+    - action: Enforce
+      namespaces:
+        - node-api-staging
+        - node-api-production
+    - action: Audit
+      namespaces:
+        - node-api-dev
+  background: true
+  rules:
+    - name: require-requests-and-limits
+      match:
+        any:
+          - resources:
+              kinds: ["Pod"]
+              namespaces: ["node-api-*"]
+      validate:
+        message: "Every container must define resources.requests and resources.limits for cpu and memory."
+        pattern:
+          spec:
+            containers:
+              - resources:
+                  requests:
+                    cpu: "?*"
+                    memory: "?*"
+                  limits:
+                    cpu: "?*"
+                    memory: "?*"
