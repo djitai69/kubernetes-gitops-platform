@@ -15,12 +15,16 @@ IMAGE_TAG="local"
 GIT_SERVER_NAME="node-api-git-server"
 GIT_SCRATCH_DIR="$(mktemp -d /tmp/node-api-gitops-demo.XXXXXX)"
 # GIT_SOURCE=local (default): stands up a throwaway Gitea container and
-# pushes a snapshot of the working tree, so the demo works fully offline
-# and picks up uncommitted local edits. GIT_SOURCE=github: skips Gitea
-# entirely and points Flux straight at the committed
-# gitops/clusters/local/flux-system/gitrepository.yaml URL (must already
-# be pushed to that real, public repo) — use this to verify Flux against
-# the actual GitHub remote rather than the local substitute.
+# pushes a snapshot of the working tree, substituting REPLACE_WITH_OWNER
+# with GHCR_OWNER on the fly — so the demo works fully offline, picks up
+# uncommitted local edits, and always matches the image just built/loaded.
+# GIT_SOURCE=github: skips Gitea entirely and points Flux straight at the
+# committed gitops/clusters/local/flux-system/gitrepository.yaml URL (must
+# already be pushed to that real, public repo). No substitution happens in
+# this mode — the committed manifests are used as-is, so GHCR_OWNER here
+# MUST match whatever owner is already baked into the committed YAML (i.e.
+# the real GitHub username), or the built/loaded image tag won't match
+# what the Deployment references and pods will sit in ImagePullBackOff.
 GIT_SOURCE="${GIT_SOURCE:-local}"
 
 export PATH="$TOOLS_DIR:$PATH"
