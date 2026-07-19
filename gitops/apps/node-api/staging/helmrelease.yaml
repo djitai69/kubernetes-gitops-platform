@@ -14,7 +14,7 @@ spec:
         namespace: flux-system
   values:
     image:
-      repository: ghcr.io/REPLACE_WITH_OWNER/node-api
+      repository: ghcr.io/djitai69/node-api
       # Promoted via pull request; digest copied from the dev-tested image.
       # Ships as `local` so `make demo` works out of the box.
       tag: local

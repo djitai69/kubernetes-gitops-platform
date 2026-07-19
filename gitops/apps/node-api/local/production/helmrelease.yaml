@@ -19,7 +19,7 @@ spec:
         namespace: flux-system
   values:
     image:
-      repository: ghcr.io/REPLACE_WITH_OWNER/node-api
+      repository: ghcr.io/djitai69/node-api
       tag: local
       pullPolicy: IfNotPresent
     config:

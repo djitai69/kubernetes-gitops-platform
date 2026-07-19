@@ -9,6 +9,6 @@ metadata:
   namespace: flux-system
 spec:
   interval: 1m
-  url: https://github.com/REPLACE_WITH_OWNER/kubernetes-gitops-platform.git
+  url: https://github.com/djitai69/kubernetes-gitops-platform.git
   ref:
     branch: main

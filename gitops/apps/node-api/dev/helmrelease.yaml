@@ -14,7 +14,7 @@ spec:
         namespace: flux-system
   values:
     image:
-      repository: ghcr.io/REPLACE_WITH_OWNER/node-api
+      repository: ghcr.io/djitai69/node-api
       # CI updates this to a short Git SHA on every merge to main. Ships as
       # `local` so `make demo` works out of the box via `kind load
       # docker-image` without requiring a prior CI run.

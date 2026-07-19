@@ -15,7 +15,7 @@ variable "azs" {
 
 variable "github_org" {
   type    = string
-  default = "REPLACE_WITH_OWNER"
+  default = "djitai69"
 }
 
 variable "github_repo" {
