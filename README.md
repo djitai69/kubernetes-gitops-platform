@@ -90,6 +90,7 @@ See `docs/gitops.md#repository-layout`.
 | AWS production architecture diagram | `docs/architecture-aws.md` |
 | Assumptions, trade-offs, known limitations | `docs/assumptions-and-limitations.md` |
 | Production recommendations | `docs/production-recommendations.md` |
+| Interview presentation flow | `docs/interview-presentation.md` |
 
 ## Application
 
@@ -148,7 +149,7 @@ for the target design.
 
 ## Presenting this submission
 
-Start with `docs/architecture-local.md` and `docs/architecture-aws.md` for
-the two-diagram overview, then `make demo` live if there's time, then walk
-through `docs/gitops.md` for the Flux reconciliation graph and the two
-documented "Flux is the only deployer" exceptions (CNI, Flux itself).
+See `docs/interview-presentation.md` — a timed walkthrough (~20 min)
+mapped to the assignment's evaluation weights, with a live-demo fallback
+plan, prepared talking points on the AI-assisted build process, and
+anticipated hard questions with one-liners.
