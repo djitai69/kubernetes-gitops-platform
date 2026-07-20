@@ -8,6 +8,13 @@ resource "aws_kms_key" "ecr" {
 resource "aws_ecr_repository" "this" {
   name                 = var.repository_name
   image_tag_mutability = var.image_tag_mutability
+  # Default false: a repository holding approved release images should
+  # never be silently emptied by `terraform destroy`. Non-production sets
+  # this true (images there are disposable) — found live: a non-empty
+  # repo blocks destroy outright ("RepositoryNotEmptyException"), forcing
+  # a manual `aws ecr batch-delete-image` detour before destroy could
+  # proceed.
+  force_delete = var.force_delete
 
   image_scanning_configuration {
     scan_on_push = var.scan_on_push

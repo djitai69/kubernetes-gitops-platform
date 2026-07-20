@@ -1,4 +1,4 @@
-.PHONY: demo demo-observability test teardown lint app-test helm-lint kyverno-test cloud-up cloud-down cloud-status
+.PHONY: demo demo-observability test teardown lint app-test helm-lint kyverno-test cloud-up cloud-down cloud-down-full cloud-status
 
 demo:
 	./scripts/bootstrap-local.sh

@@ -23,9 +23,66 @@ confirm() {
 [ -f "$STATE_FILE" ] || fail "no $STATE_FILE found — nothing to destroy, or STATE_BUCKET was never persisted locally. Set STATE_BUCKET manually if you know it."
 STATE_BUCKET="$(cat "$STATE_FILE")"
 
-log "Destroying non-production stack (cluster, VPC, IAM, ECR — the state bucket itself is kept unless --with-bootstrap)"
 cd "$ROOT_DIR/infra/live/nonprod"
 terraform init -input=false -backend-config="bucket=$STATE_BUCKET" -reconfigure
+
+# ---------------------------------------------------------------------------
+# The AWS Load Balancer Controller creates ALBs and security groups
+# directly via the AWS API in response to Ingress objects — Terraform has
+# no idea they exist, since it never created them. Found live: leaving
+# them behind blocks `terraform destroy` outright (an ALB's ENIs block
+# subnet/IGW deletion; the controller's security groups block the final
+# VPC deletion), turning a one-command teardown into a stuck destroy plus
+# manual `aws elbv2`/`aws ec2` cleanup. Clean them up first so destroy can
+# actually complete unattended.
+CLUSTER_NAME=$(terraform output -raw cluster_name 2>/dev/null || echo "")
+REGION=$(terraform output -raw region 2>/dev/null || echo "us-east-1")
+
+if [ -n "$CLUSTER_NAME" ]; then
+  log "Cleaning up AWS Load Balancer Controller resources for cluster '$CLUSTER_NAME' (not managed by Terraform)"
+
+  ALB_ARNS=$(aws resourcegroupstaggingapi get-resources \
+    --region "$REGION" \
+    --resource-type-filters elasticloadbalancing:loadbalancer \
+    --tag-filters "Key=elbv2.k8s.aws/cluster,Values=$CLUSTER_NAME" \
+    --query 'ResourceTagMappingList[].ResourceARN' --output text 2>/dev/null || true)
+
+  if [ -n "$ALB_ARNS" ]; then
+    for arn in $ALB_ARNS; do
+      log "Deleting load balancer: $arn"
+      aws elbv2 delete-load-balancer --load-balancer-arn "$arn" --region "$REGION" || true
+    done
+
+    log "Waiting for load balancer ENIs to release (up to 3 minutes)"
+    VPC_ID=$(terraform output -raw vpc_id 2>/dev/null || echo none)
+    for i in $(seq 1 18); do
+      REMAINING=$(aws ec2 describe-network-interfaces --region "$REGION" \
+        --filters "Name=description,Values=ELB*" "Name=vpc-id,Values=$VPC_ID" \
+        --query 'length(NetworkInterfaces)' --output text 2>/dev/null || echo 0)
+      [ "$REMAINING" = "0" ] && break
+      sleep 10
+    done
+  else
+    log "No leftover load balancers found"
+  fi
+
+  SG_IDS=$(aws resourcegroupstaggingapi get-resources \
+    --region "$REGION" \
+    --resource-type-filters ec2:security-group \
+    --tag-filters "Key=elbv2.k8s.aws/cluster,Values=$CLUSTER_NAME" \
+    --query 'ResourceTagMappingList[].ResourceARN' --output text 2>/dev/null \
+    | grep -oE 'sg-[a-z0-9]+' || true)
+
+  if [ -n "$SG_IDS" ]; then
+    for sg in $SG_IDS; do
+      log "Deleting security group: $sg"
+      aws ec2 delete-security-group --group-id "$sg" --region "$REGION" 2>&1 || true
+    done
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+log "Planning destroy of the non-production stack (cluster, VPC, IAM, ECR — the state bucket itself is kept unless --with-bootstrap)"
 terraform plan -destroy -input=false -out=/tmp/nonprod-destroy.tfplan
 
 confirm "Destroy the plan above? This deletes real AWS resources." || fail "aborted by user"

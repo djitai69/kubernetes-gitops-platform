@@ -39,6 +39,9 @@ module "ecr" {
   source = "../../modules/ecr"
 
   repository_name = "node-api"
+  # Non-production images are disposable — allow `terraform destroy` to
+  # remove them along with everything else. Production leaves this false.
+  force_delete = true
 }
 
 module "addons" {

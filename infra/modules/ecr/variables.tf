@@ -20,6 +20,12 @@ variable "retention_count" {
   default     = 30
 }
 
+variable "force_delete" {
+  description = "Allow terraform destroy to delete a non-empty repository. Keep false for any repository holding approved release images."
+  type        = bool
+  default     = false
+}
+
 variable "tags" {
   type    = map(string)
   default = {}
