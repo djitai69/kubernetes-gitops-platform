@@ -60,6 +60,46 @@ from the reviewed, uploaded plan artifact — never an unreviewed branch.
 AWS auth is OIDC in both cases; no long-lived AWS access keys are stored in
 CI.
 
+## Required repository configuration (not yet set up)
+
+The workflows are verified working — every job was actually run via real
+pushes to this repo, and every code-level bug found that way is fixed
+(see `git log` for the "fix:" commits). What's left is infrastructure
+configuration, not code: two classes of GitHub repo secrets/vars/environments
+that were never provisioned, so the jobs that need them fail with
+`Input required and not supplied: <name>` — a clean, expected failure
+mode, not a bug.
+
+**Secrets** (Settings → Secrets and variables → Actions → Secrets):
+
+| Name | Used by | What it is |
+|---|---|---|
+| `GITOPS_BOT_TOKEN` | `ci.yaml` (`update-dev-gitops`), `release.yaml` | A GitHub App installation token (not a PAT — see *"CI write identity"* above) scoped to write to this repo. |
+| `NONPROD_TERRAFORM_ROLE_ARN` | `terraform.yaml` | The AWS IAM role for OIDC-authenticated `terraform plan`/`apply` against the non-production account. Already created by Terraform tonight — get it locally with `cd infra/live/nonprod && terraform output` (not printed here; it's account-specific and shouldn't be committed). |
+| `PROD_TERRAFORM_ROLE_ARN` | `terraform.yaml` | Same, for the production account/root config (not yet applied — see `docs/cost.md`). |
+| `PROD_PROMOTION_ROLE_ARN` | `release.yaml` | The `ci-production-promotion` role (`infra/modules/iam/github-oidc.tf`) — ECR read/write scoped to the digest-copy promotion step only. |
+
+**Variables** (same page, Variables tab):
+
+| Name | Used by | What it is |
+|---|---|---|
+| `AWS_REGION` | `terraform.yaml` | e.g. `us-east-1`. |
+| `PROD_ECR_REGISTRY` | `release.yaml` | The production ECR registry hostname (`<account>.dkr.ecr.<region>.amazonaws.com`). |
+
+**Environments** (Settings → Environments), each with its own required
+reviewers for the approval gate it's meant to enforce:
+
+| Name | Used by | Gate |
+|---|---|---|
+| `nonprod-apply` | `terraform.yaml` | Lighter approval for non-production `terraform apply`. |
+| `production-apply` | `terraform.yaml` | Protected approval for production `terraform apply`. |
+| `production` | `release.yaml` | Protected approval for the production promotion PR. |
+
+Until these exist, `ci.yaml`'s first three jobs (lint/test, policy
+checks, build+scan+push) run and pass on their own — verified tonight,
+including a real image landing in `ghcr.io/djitai69/node-api`. Only the
+GitOps-write and Terraform-apply steps need the above.
+
 ## What CI can and can't do
 
 CI has registry push permissions and Git write permissions. It has **no
