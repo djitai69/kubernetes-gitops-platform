@@ -86,6 +86,7 @@ terraform apply -input=false /tmp/nonprod.tfplan
 CLUSTER_NAME=$(terraform output -raw cluster_name)
 REGION=$(terraform output -raw region)
 ECR_URL=$(terraform output -raw ecr_repository_url)
+VPC_ID=$(terraform output -raw vpc_id)
 cd "$ROOT_DIR"
 
 # ---------------------------------------------------------------------------
@@ -135,13 +136,14 @@ kubectl -n flux-system wait --for=condition=Available deployment --all --timeout
 
 # ---------------------------------------------------------------------------
 log "Creating cluster-vars Secret for Flux postBuild.substituteFrom"
-# Resolves \${AWS_ACCOUNT_ID}, \${AWS_REGION}, \${ECR_REPOSITORY_URL}
-# placeholders in the committed GitOps manifests at apply-time — none of
-# these values are ever written to Git.
+# Resolves \${AWS_ACCOUNT_ID}, \${AWS_REGION}, \${ECR_REPOSITORY_URL},
+# \${VPC_ID} placeholders in the committed GitOps manifests at
+# apply-time — none of these values are ever written to Git.
 kubectl -n flux-system create secret generic cluster-vars \
   --from-literal=AWS_ACCOUNT_ID="$ACCOUNT_ID" \
   --from-literal=AWS_REGION="$REGION" \
   --from-literal=ECR_REPOSITORY_URL="$ECR_URL" \
+  --from-literal=VPC_ID="$VPC_ID" \
   --dry-run=client -o yaml | kubectl apply -f -
 
 # ---------------------------------------------------------------------------

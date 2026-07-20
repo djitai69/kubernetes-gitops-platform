@@ -20,6 +20,12 @@ spec:
   values:
     clusterName: node-api-nonprod
     region: ${AWS_REGION}
+    # Explicit, not auto-discovered: the controller's default VPC-ID
+    # lookup goes through EC2 instance metadata (IMDS), which times out
+    # from inside a pod on this cluster's node metadata hop-limit —
+    # found live (CrashLoopBackOff, "failed to fetch VPC ID from
+    # instance metadata: ... context deadline exceeded").
+    vpcId: ${VPC_ID}
     serviceAccount:
       create: true
       name: aws-load-balancer-controller
