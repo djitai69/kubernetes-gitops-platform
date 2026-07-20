@@ -51,6 +51,12 @@ variable "platform_node_desired_size" {
   default = 2
 }
 
+variable "taint_platform_nodes" {
+  description = "Taint the platform node group so only tolerating workloads land there. Only meaningful once Karpenter is deployed to provide an untainted landing zone for everything else — see the comment above the taint block in main.tf."
+  type        = bool
+  default     = true
+}
+
 variable "tags" {
   type    = map(string)
   default = {}

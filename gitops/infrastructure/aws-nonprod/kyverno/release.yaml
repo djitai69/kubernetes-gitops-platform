@@ -41,3 +41,16 @@ spec:
       tolerations: *platformToleration
     reportsController:
       tolerations: *platformToleration
+    # The chart's pinned bitnami/kubectl:1.30.2 hook-job image no longer
+    # exists on Docker Hub — Bitnami moved deprecated free-tier tags to
+    # the bitnamilegacy org in 2025. Found live: the post-upgrade
+    # policyReportsCleanup Job sat in ImagePullBackOff, which Flux
+    # reported only as an opaque "Job ... status: InProgress" timeout.
+    policyReportsCleanup:
+      image:
+        repository: bitnamilegacy/kubectl
+        tag: "1.30.2"
+    webhooksCleanup:
+      image:
+        repository: bitnamilegacy/kubectl
+        tag: "1.30.2"

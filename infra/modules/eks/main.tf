@@ -142,10 +142,23 @@ resource "aws_eks_node_group" "platform" {
     "node-role" = "platform"
   }
 
-  taint {
-    key    = "node-role"
-    value  = "platform"
-    effect = "NO_SCHEDULE"
+  # Tainting this group only makes sense once Karpenter is actually
+  # deployed and providing an untainted landing zone for application
+  # workloads — otherwise it's the *only* node group that exists, and
+  # every component that must run somewhere (EKS-managed addons, Flux
+  # itself, Helm hook Jobs from third-party charts) needs an explicit
+  # toleration or it schedules nowhere. Found this the hard way: hit it
+  # four separate times (coredns, the EBS CSI driver, flux install, and
+  # a Kyverno Helm hook Job) bootstrapping a fresh cluster with no
+  # Karpenter deployed. Default true matches the documented production
+  # design; set false where Karpenter isn't part of the environment.
+  dynamic "taint" {
+    for_each = var.taint_platform_nodes ? [1] : []
+    content {
+      key    = "node-role"
+      value  = "platform"
+      effect = "NO_SCHEDULE"
+    }
   }
 
   update_config {

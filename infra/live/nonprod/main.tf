@@ -27,6 +27,12 @@ module "eks" {
   # bastion, SSM) exists.
   endpoint_public_access       = true
   endpoint_public_access_cidrs = ["0.0.0.0/0"]
+  # Karpenter's AWS-side prerequisites exist (module.karpenter below) but
+  # the controller itself isn't deployed by Flux here (see
+  # gitops/clusters/aws-nonprod/README.md) — so there is no untainted
+  # landing zone for anything, and tainting would just break every
+  # component. See the comment on this variable in modules/eks/variables.tf.
+  taint_platform_nodes = false
 }
 
 module "ecr" {
