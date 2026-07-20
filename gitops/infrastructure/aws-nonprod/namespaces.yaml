@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: node-api-dev
+  labels:
+    kubernetes.io/metadata.name: node-api-dev
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: node-api-staging
+  labels:
+    kubernetes.io/metadata.name: node-api-staging

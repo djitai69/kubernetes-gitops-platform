@@ -1,12 +1,30 @@
+data "aws_caller_identity" "current" {}
+
 # GitHub Actions authenticates via OIDC, never long-lived AWS access keys.
 # Trust is scoped to this specific repo (and optionally branch/environment)
 # so a workflow in an unrelated repo cannot assume this role.
+#
+# IAM OIDC providers are account-global, keyed by URL — an AWS account can
+# only have one for token.actions.githubusercontent.com, no matter how
+# many repos/roles trust it. If the account already has one (from another
+# project), creating a second one fails with EntityAlreadyExists. Set
+# create_github_oidc_provider=false to reuse the existing one instead; its
+# ARN is deterministic from the account ID, so no data-source lookup is
+# needed.
 resource "aws_iam_openid_connect_provider" "github" {
-  count           = var.enable_github_actions_oidc ? 1 : 0
+  count           = var.enable_github_actions_oidc && var.create_github_oidc_provider ? 1 : 0
   url             = "https://token.actions.githubusercontent.com"
   client_id_list  = ["sts.amazonaws.com"]
   thumbprint_list = ["6938fd4d98bab03faadb97b34396831e3780aea1"]
   tags            = var.tags
+}
+
+locals {
+  github_oidc_provider_arn = var.enable_github_actions_oidc ? (
+    var.create_github_oidc_provider
+    ? aws_iam_openid_connect_provider.github[0].arn
+    : "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/token.actions.githubusercontent.com"
+  ) : ""
 }
 
 data "aws_iam_policy_document" "github_actions_trust" {
@@ -18,7 +36,7 @@ data "aws_iam_policy_document" "github_actions_trust" {
 
     principals {
       type        = "Federated"
-      identifiers = [aws_iam_openid_connect_provider.github[0].arn]
+      identifiers = [local.github_oidc_provider_arn]
     }
 
     condition {

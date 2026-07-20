@@ -8,8 +8,9 @@ terraform {
     }
   }
 
+  # Partial backend config — see infra/live/nonprod/versions.tf for why
+  # bucket is omitted here and supplied at `terraform init` time instead.
   backend "s3" {
-    bucket       = "REPLACE_WITH_PRODUCTION_STATE_BUCKET"
     key          = "node-api-platform/production/terraform.tfstate"
     region       = "us-east-1"
     encrypt      = true

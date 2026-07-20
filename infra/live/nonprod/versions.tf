@@ -8,8 +8,12 @@ terraform {
     }
   }
 
+  # Partial backend config — bucket is deliberately omitted here (it
+  # would otherwise be the one piece of account-identifying data baked
+  # into the repo) and supplied at `terraform init` time instead:
+  #   terraform init -backend-config="bucket=<your-bucket>"
+  # scripts/cloud-up.sh does this automatically.
   backend "s3" {
-    bucket       = "REPLACE_WITH_NONPROD_STATE_BUCKET"
     key          = "node-api-platform/nonprod/terraform.tfstate"
     region       = "us-east-1"
     encrypt      = true

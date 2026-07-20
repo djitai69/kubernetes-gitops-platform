@@ -1,0 +1,37 @@
+# IRSA role ARN is injected at apply-time via Flux's postBuild.substituteFrom
+# (see gitops/clusters/aws-nonprod/flux-system/kustomization-infrastructure.yaml)
+# so the account ID is never committed to Git. The role itself is created
+# by Terraform (infra/modules/iam/irsa.tf, key "aws-load-balancer-controller").
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: aws-load-balancer-controller
+  namespace: flux-system
+spec:
+  interval: 30m
+  targetNamespace: kube-system
+  chart:
+    spec:
+      chart: aws-load-balancer-controller
+      version: "1.9.x"
+      sourceRef:
+        kind: HelmRepository
+        name: eks-charts
+  values:
+    clusterName: node-api-nonprod
+    region: ${AWS_REGION}
+    serviceAccount:
+      create: true
+      name: aws-load-balancer-controller
+      annotations:
+        eks.amazonaws.com/role-arn: "arn:aws:iam::${AWS_ACCOUNT_ID}:role/node-api-nonprod-aws-load-balancer-controller"
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+    # See ../kyverno/release.yaml for why this is needed.
+    tolerations:
+      - key: node-role
+        operator: Equal
+        value: platform
+        effect: NoSchedule

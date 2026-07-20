@@ -33,6 +33,12 @@ variable "enable_github_actions_oidc" {
   default = true
 }
 
+variable "create_github_oidc_provider" {
+  description = "False to reuse an existing account-wide token.actions.githubusercontent.com OIDC provider instead of creating a new one (IAM OIDC providers are account-global; an account can only have one per URL)"
+  type        = bool
+  default     = true
+}
+
 variable "tags" {
   type    = map(string)
   default = {}

@@ -1,4 +1,4 @@
-.PHONY: demo demo-observability test teardown lint app-test helm-lint kyverno-test
+.PHONY: demo demo-observability test teardown lint app-test helm-lint kyverno-test cloud-up cloud-down cloud-status
 
 demo:
 	./scripts/bootstrap-local.sh
@@ -35,3 +35,24 @@ kyverno-test:
 
 teardown:
 	./scripts/teardown-local.sh
+
+# --- Real AWS (costs money while it exists) ---------------------------------
+
+cloud-up:
+	./scripts/cloud-up.sh
+
+cloud-down:
+	./scripts/cloud-down.sh
+
+cloud-down-full:
+	./scripts/cloud-down.sh --with-bootstrap
+
+cloud-status:
+	@if [ ! -f infra/live/.state-bucket-nonprod ]; then \
+		echo "No cloud environment found (infra/live/.state-bucket-nonprod missing)."; \
+	else \
+		cd infra/live/nonprod && \
+		terraform init -input=false -backend-config="bucket=$$(cat ../.state-bucket-nonprod)" -reconfigure >/dev/null && \
+		terraform output; \
+		.tools/flux get kustomizations -A 2>/dev/null || echo "(flux not reachable — check kubeconfig)"; \
+	fi

@@ -1,0 +1,60 @@
+# Image repository substituted at apply-time (see
+# gitops/clusters/aws-nonprod/flux-system/kustomization-apps.yaml) — the
+# ECR repository URL contains the account ID, so it isn't committed
+# literally. cloud-up.sh pushes the image tagged "aws-demo" before Flux
+# reconciles this.
+#
+# The documented design shares one ALB across dev+staging via host-based
+# routing (docs/networking.md). There's no real domain wired up for this
+# live proof, so host-based routing has nothing to route on — each
+# environment gets its own ALB here instead, with a note that this is a
+# simplification, not the target design.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: node-api
+  namespace: node-api-dev
+spec:
+  interval: 1m
+  chart:
+    spec:
+      chart: ./helm/node-api
+      sourceRef:
+        kind: GitRepository
+        name: node-api-platform
+        namespace: flux-system
+  values:
+    image:
+      repository: ${ECR_REPOSITORY_URL}
+      tag: aws-demo
+      pullPolicy: IfNotPresent
+    config:
+      appEnv: dev
+      logLevel: DEBUG
+      nodesCacheTtlSeconds: 5
+    replicaCount: 1
+    autoscaling:
+      enabled: false
+    pdb:
+      enabled: false
+    topologySpread:
+      enabled: false
+    serviceMonitor:
+      enabled: false
+    reloader:
+      enabled: true
+    ingress:
+      enabled: true
+      className: alb
+      host: ""
+      annotations:
+        alb.ingress.kubernetes.io/scheme: internet-facing
+        alb.ingress.kubernetes.io/target-type: ip
+        alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
+    networkPolicy:
+      kubernetesApi:
+        ports: [443]
+        cidr: "10.40.0.0/16"
+    secret:
+      name: node-api-secret
+      apiTokenKey: API_TOKEN

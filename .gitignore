@@ -13,6 +13,10 @@ __pycache__/
 tfplan
 crash.log
 crash.*.log
+# State bucket name is account-identifying; generated/cached locally by
+# scripts/cloud-up.sh, never committed.
+infra/live/.state-bucket-nonprod
+infra/live/.state-bucket-production
 
 # Vendored CLIs (fetched by scripts, not committed)
 .tools/

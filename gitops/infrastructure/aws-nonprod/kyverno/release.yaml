@@ -1,0 +1,43 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: kyverno
+  namespace: flux-system
+spec:
+  interval: 30m
+  targetNamespace: kyverno
+  install:
+    createNamespace: true
+  chart:
+    spec:
+      chart: kyverno
+      version: "3.3.x"
+      sourceRef:
+        kind: HelmRepository
+        name: kyverno
+  values:
+    replicaCount: 1
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    # Until Karpenter is deployed, the tainted platform node group
+    # (node-role=platform:NoSchedule) is the only node group that exists —
+    # every component here needs a matching toleration or it schedules
+    # nowhere and sits Pending forever (found and fixed the same issue on
+    # the EKS-managed addons; same root cause here).
+    admissionController:
+      tolerations: &platformToleration
+        - key: node-role
+          operator: Equal
+          value: platform
+          effect: NoSchedule
+    backgroundController:
+      tolerations: *platformToleration
+    cleanupController:
+      tolerations: *platformToleration
+    reportsController:
+      tolerations: *platformToleration

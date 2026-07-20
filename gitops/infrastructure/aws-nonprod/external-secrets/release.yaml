@@ -1,0 +1,33 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: external-secrets
+  namespace: flux-system
+spec:
+  interval: 30m
+  targetNamespace: external-secrets
+  install:
+    createNamespace: true
+  chart:
+    spec:
+      chart: external-secrets
+      version: "0.10.x"
+      sourceRef:
+        kind: HelmRepository
+        name: external-secrets
+  values:
+    installCRDs: true
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+    # See ../kyverno/release.yaml for why this is needed.
+    tolerations: &platformToleration
+      - key: node-role
+        operator: Equal
+        value: platform
+        effect: NoSchedule
+    webhook:
+      tolerations: *platformToleration
+    certController:
+      tolerations: *platformToleration

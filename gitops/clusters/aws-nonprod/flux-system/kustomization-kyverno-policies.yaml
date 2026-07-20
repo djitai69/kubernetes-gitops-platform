@@ -1,0 +1,23 @@
+# Sibling of "infrastructure", not one of its managed resources — see the
+# identical local version for why (circular-dependency deadlock hit and
+# fixed during development).
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: kyverno-policies
+  namespace: flux-system
+spec:
+  interval: 5m
+  sourceRef:
+    kind: GitRepository
+    name: node-api-platform
+  path: ./policies/kyverno
+  prune: true
+  dependsOn:
+    - name: infrastructure
+  healthChecks:
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: kyverno-admission-controller
+      namespace: kyverno
+  timeout: 5m

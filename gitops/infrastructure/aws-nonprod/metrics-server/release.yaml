@@ -1,0 +1,24 @@
+# No --kubelet-insecure-tls here (unlike the local kind demo) — real EKS
+# kubelet serving certs are properly signed by the cluster CA.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: metrics-server
+  namespace: flux-system
+spec:
+  interval: 30m
+  targetNamespace: kube-system
+  chart:
+    spec:
+      chart: metrics-server
+      version: "3.12.x"
+      sourceRef:
+        kind: HelmRepository
+        name: metrics-server
+  values:
+    # See kyverno/release.yaml for why this is needed.
+    tolerations:
+      - key: node-role
+        operator: Equal
+        value: platform
+        effect: NoSchedule
