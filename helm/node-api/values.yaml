@@ -5,7 +5,12 @@ nameOverride: ""
 
 image:
   repository: ghcr.io/example/node-api
-  tag: "latest"
+  # Never "latest" — the chart's own Kyverno policy
+  # (policies/kyverno/enforce/image-policy.yaml) and CI's kube-linter step
+  # both reject it, and correctly so: every real environment overrides
+  # this anyway (see gitops/apps/node-api/*/helmrelease.yaml), so the bare
+  # chart default should still be a valid, lint-clean image reference.
+  tag: "0.1.0"
   digest: ""
   pullPolicy: IfNotPresent
 
