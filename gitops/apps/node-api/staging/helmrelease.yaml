@@ -5,6 +5,17 @@ metadata:
   namespace: node-api-staging
 spec:
   interval: 1m
+  timeout: 5m
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+      remediateLastFailure: true
+  rollback:
+    timeout: 3m
+    cleanupOnFail: true
   chart:
     spec:
       chart: ./helm/node-api

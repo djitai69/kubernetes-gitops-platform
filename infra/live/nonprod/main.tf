@@ -65,6 +65,9 @@ module "iam" {
   oidc_provider_url = module.eks.oidc_provider_url
   github_org        = var.github_org
   github_repo       = var.github_repo
+  # This AWS account already has an account-wide GitHub Actions OIDC
+  # provider from an unrelated project; reuse it instead of colliding.
+  create_github_oidc_provider = false
 
   eso_namespaces = {
     node-api-dev     = "node-api/dev/"
